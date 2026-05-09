@@ -56,6 +56,9 @@ export const links = {
 
   impot: (params: { revenu?: number; situation?: string; enfants?: number } = {}) =>
     build("/simulateur/impot-revenu", params),
+
+  retraite: (params: { naissance?: number; debut?: number; salaire?: number } = {}) =>
+    build("/simulateur/retraite", params),
 }
 
 /**

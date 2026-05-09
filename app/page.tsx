@@ -41,6 +41,14 @@ const SIMULATEURS = [
       "Quotient familial, décote, TMI, taux moyen. Visualisation graphique de vos revenus nets.",
     href: "/simulateur/impot-revenu",
   },
+  {
+    numero: "06",
+    titre: "Retraite",
+    accroche: "Réforme 2023, trimestres, pension",
+    description:
+      "Âge légal (62–64 ans), trimestres requis, décote/surcote, pension estimée. Trouvez votre âge optimal.",
+    href: "/simulateur/retraite",
+  },
 ]
 
 export default function Home() {
@@ -70,7 +78,7 @@ export default function Home() {
               href="#simulateurs"
               className="inline-flex items-center justify-center rounded-full border border-ink-200 text-ink px-7 py-4 font-body text-sm font-medium transition-all duration-200 hover:bg-ink hover:text-ivory hover:border-ink"
             >
-              Voir les 5 simulateurs
+              Voir les 6 simulateurs
             </Link>
           </div>
         </div>
@@ -82,8 +90,8 @@ export default function Home() {
           <div className="mb-16 max-w-2xl">
             <p className="text-xs uppercase tracking-wide text-ink-400 mb-4">— Le parcours</p>
             <h2 className="font-display text-3xl md:text-5xl font-medium tracking-tight leading-tight">
-              De la <span className="italic text-forest">paie</span>{" "}à l&apos;impôt,
-              en passant par le freelance et les ruptures.
+              De la <span className="italic text-forest">paie</span>{" "}à la retraite,
+              en passant par le freelance, le chômage et les impôts.
             </h2>
           </div>
 

@@ -160,10 +160,10 @@ export function SalaireBrutNet({ initial }: SalaireBrutNetProps = {}) {
               description: `Avec ${formatEuros(r.netAvantImpot * 12)} net annuel, estimez votre IR, votre TMI et votre taux moyen.`,
             },
             {
-              eyebrow: "Si je perds mon emploi",
-              href: links.chomage({ salaire: Math.round(r.brut), duree: 18, age: 35 }),
-              title: "Mes droits au chômage",
-              description: `Avec ${formatEuros(r.brut)} brut, estimez votre ARE mensuelle et la durée d'indemnisation.`,
+              eyebrow: "Dans 20 ans",
+              href: links.retraite({ salaire: Math.round(brut * 12) }),
+              title: "Estimer ma pension de retraite",
+              description: `Avec ${formatEuros(brut)} brut mensuel, trouvez votre âge optimal et votre pension estimée.`,
             },
           ]}
         />
