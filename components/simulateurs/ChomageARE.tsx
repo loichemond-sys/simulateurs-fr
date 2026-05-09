@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { calculerARE, MotifRupture } from "@/lib/calculateurs/chomage"
 import { formatEuros } from "@/lib/format"
-import { Field, SliderInput } from "./ui/Field"
+import { Field, SliderInput, PeriodeToggle } from "./ui/Field"
 import { NextSteps } from "./ui/NextSteps"
 import { links } from "@/lib/cross-links"
 
@@ -18,6 +18,7 @@ export interface ChomageAREProps {
 
 export function ChomageARE({ initial }: ChomageAREProps = {}) {
   const [salaire, setSalaire] = useState(initial?.salaire ?? 2500)
+  const [periodicite, setPeriodicite] = useState<"mensuel" | "annuel">("mensuel")
   const [duree, setDuree] = useState(initial?.duree ?? 18)
   const [age, setAge] = useState(initial?.age ?? 35)
   const [motif, setMotif] = useState<MotifRupture>(initial?.motif ?? "licenciement")
@@ -28,8 +29,17 @@ export function ChomageARE({ initial }: ChomageAREProps = {}) {
     <div className="grid lg:grid-cols-5 gap-8 lg:gap-12">
       <div className="lg:col-span-2 space-y-8">
         <div className="card p-7 space-y-7">
-          <Field label="Salaire brut mensuel moyen" hint="Sur les 12 derniers mois">
-            <SliderInput value={salaire} onChange={setSalaire} min={1400} max={12000} step={50} />
+          <Field label="Salaire brut moyen" hint={periodicite === "annuel" ? `soit ${salaire.toLocaleString("fr-FR")} €/mois — sur les 12 derniers mois` : "Sur les 12 derniers mois"}>
+            <div className="flex justify-end mb-2">
+              <PeriodeToggle value={periodicite} onChange={setPeriodicite} />
+            </div>
+            <SliderInput
+              value={periodicite === "annuel" ? salaire * 12 : salaire}
+              onChange={(v) => setSalaire(periodicite === "annuel" ? Math.round(v / 12) : v)}
+              min={periodicite === "annuel" ? 16800 : 1400}
+              max={periodicite === "annuel" ? 144000 : 12000}
+              step={periodicite === "annuel" ? 600 : 50}
+            />
           </Field>
 
           <Field label="Durée d'emploi" hint={`${duree} mois travaillés sur les 24 derniers mois`}>

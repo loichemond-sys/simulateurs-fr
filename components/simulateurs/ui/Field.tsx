@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode } from "react"
+import { ReactNode, useRef, useState } from "react"
 
 interface FieldProps {
   label: string
@@ -30,13 +30,35 @@ interface SliderInputProps {
 }
 
 export function SliderInput({ value, onChange, min, max, step = 1, unit = "€" }: SliderInputProps) {
+  const [inputStr, setInputStr] = useState(String(value))
+  const prevValueRef = useRef(value)
+
+  // Sync display when value changes from slider or external source
+  if (prevValueRef.current !== value) {
+    prevValueRef.current = value
+    setInputStr(String(value))
+  }
+
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
         <input
           type="number"
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value) || 0)}
+          value={inputStr}
+          onChange={(e) => {
+            setInputStr(e.target.value)
+            const n = parseFloat(e.target.value)
+            if (!isNaN(n) && e.target.value !== "") onChange(n)
+          }}
+          onBlur={() => {
+            const n = parseFloat(inputStr)
+            if (isNaN(n) || inputStr === "") {
+              setInputStr(String(value))
+            } else {
+              onChange(n)
+            }
+          }}
+          onFocus={(e) => e.target.select()}
           className="font-display text-2xl font-medium tracking-tight bg-transparent border-0 outline-none text-ink w-32 focus:ring-0 p-0"
         />
         <span className="text-sm text-ink-400 font-light">{unit}</span>
@@ -53,6 +75,31 @@ export function SliderInput({ value, onChange, min, max, step = 1, unit = "€" 
         <span>{min.toLocaleString("fr-FR")}{unit !== "%" ? ` ${unit}` : "%"}</span>
         <span>{max.toLocaleString("fr-FR")}{unit !== "%" ? ` ${unit}` : "%"}</span>
       </div>
+    </div>
+  )
+}
+
+export function PeriodeToggle({
+  value,
+  onChange,
+}: {
+  value: "mensuel" | "annuel"
+  onChange: (v: "mensuel" | "annuel") => void
+}) {
+  return (
+    <div className="inline-flex rounded-lg overflow-hidden border border-ivory-300 text-xs font-medium">
+      {(["mensuel", "annuel"] as const).map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onChange(p)}
+          className={`px-3 py-1.5 transition-colors ${
+            value === p ? "bg-ink text-ivory" : "text-ink-400 hover:text-ink bg-white"
+          }`}
+        >
+          {p === "mensuel" ? "/ mois" : "/ an"}
+        </button>
+      ))}
     </div>
   )
 }

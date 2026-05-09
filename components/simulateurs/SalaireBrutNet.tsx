@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { calculerSalaireNet, StatutSalarie } from "@/lib/calculateurs/salaire"
 import { formatEuros, formatPercent } from "@/lib/format"
-import { Field, SliderInput, SegmentedControl } from "./ui/Field"
+import { Field, SliderInput, SegmentedControl, PeriodeToggle } from "./ui/Field"
 import { NextSteps } from "./ui/NextSteps"
 import { links } from "@/lib/cross-links"
 
@@ -19,6 +19,7 @@ export interface SalaireBrutNetProps {
 
 export function SalaireBrutNet({ initial }: SalaireBrutNetProps = {}) {
   const [brut, setBrut] = useState(initial?.brut ?? 3000)
+  const [periodicite, setPeriodicite] = useState<"mensuel" | "annuel">("mensuel")
   const [statut, setStatut] = useState<StatutSalarie>(initial?.statut ?? "non-cadre")
   const [tempsPartiel, setTempsPartiel] = useState(initial?.temps ?? 100)
   const [tauxPAS, setTauxPAS] = useState(initial?.pas ?? 0)
@@ -34,8 +35,17 @@ export function SalaireBrutNet({ initial }: SalaireBrutNetProps = {}) {
       {/* Inputs */}
       <div className="lg:col-span-2 space-y-8">
         <div className="card p-7 space-y-7">
-          <Field label="Salaire brut mensuel">
-            <SliderInput value={brut} onChange={setBrut} min={1400} max={15000} step={50} />
+          <Field label="Salaire brut" hint={periodicite === "annuel" ? `soit ${(brut).toLocaleString("fr-FR")} €/mois` : undefined}>
+            <div className="flex justify-end mb-2">
+              <PeriodeToggle value={periodicite} onChange={setPeriodicite} />
+            </div>
+            <SliderInput
+              value={periodicite === "annuel" ? brut * 12 : brut}
+              onChange={(v) => setBrut(periodicite === "annuel" ? Math.round(v / 12) : v)}
+              min={periodicite === "annuel" ? 16800 : 1400}
+              max={periodicite === "annuel" ? 180000 : 15000}
+              step={periodicite === "annuel" ? 600 : 50}
+            />
           </Field>
 
           <Field label="Statut">

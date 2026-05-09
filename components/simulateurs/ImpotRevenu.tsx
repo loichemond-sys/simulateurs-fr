@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { calculerIR, calculerParts, SituationFamiliale } from "@/lib/calculateurs/impot"
 import { formatEuros, formatPercent } from "@/lib/format"
-import { Field, SliderInput } from "./ui/Field"
+import { Field, SliderInput, PeriodeToggle } from "./ui/Field"
 import { NextSteps } from "./ui/NextSteps"
 import { links } from "@/lib/cross-links"
 
@@ -17,6 +17,7 @@ export interface ImpotRevenuProps {
 
 export function ImpotRevenu({ initial }: ImpotRevenuProps = {}) {
   const [revenu, setRevenu] = useState(initial?.revenu ?? 35000)
+  const [periodicite, setPeriodicite] = useState<"mensuel" | "annuel">("annuel")
   const [situation, setSituation] = useState<SituationFamiliale>(initial?.situation ?? "celibataire")
   const [enfants, setEnfants] = useState(initial?.enfants ?? 0)
   const [parentIsole, setParentIsole] = useState(false)
@@ -32,8 +33,17 @@ export function ImpotRevenu({ initial }: ImpotRevenuProps = {}) {
     <div className="grid lg:grid-cols-5 gap-8 lg:gap-12">
       <div className="lg:col-span-2 space-y-8">
         <div className="card p-7 space-y-7">
-          <Field label="Revenu net annuel" hint="Salaires nets imposables (avant abattement de 10%)">
-            <SliderInput value={revenu} onChange={setRevenu} min={10000} max={250000} step={500} />
+          <Field label="Revenu net" hint={periodicite === "mensuel" ? `soit ${revenu.toLocaleString("fr-FR")} €/an — salaires nets imposables` : "Salaires nets imposables (avant abattement de 10%)"}>
+            <div className="flex justify-end mb-2">
+              <PeriodeToggle value={periodicite} onChange={setPeriodicite} />
+            </div>
+            <SliderInput
+              value={periodicite === "mensuel" ? Math.round(revenu / 12) : revenu}
+              onChange={(v) => setRevenu(periodicite === "mensuel" ? Math.round(v * 12) : v)}
+              min={periodicite === "mensuel" ? 833 : 10000}
+              max={periodicite === "mensuel" ? 20833 : 250000}
+              step={periodicite === "mensuel" ? 50 : 500}
+            />
           </Field>
 
           <Field label="Situation familiale">

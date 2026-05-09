@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { calculerIndemnite, calculerCarenceARE, TypeRupture } from "@/lib/calculateurs/licenciement"
 import { formatEuros } from "@/lib/format"
-import { Field, SliderInput } from "./ui/Field"
+import { Field, SliderInput, PeriodeToggle } from "./ui/Field"
 import { NextSteps } from "./ui/NextSteps"
 import { links } from "@/lib/cross-links"
 
@@ -19,6 +19,7 @@ export interface LicenciementRuptureProps {
 export function LicenciementRupture({ initial }: LicenciementRuptureProps = {}) {
   const [type, setType] = useState<TypeRupture>(initial?.type ?? "licenciement-personnel")
   const [salaire, setSalaire] = useState(initial?.salaire ?? 2800)
+  const [periodicite, setPeriodicite] = useState<"mensuel" | "annuel">("mensuel")
   const [annees, setAnnees] = useState(initial?.annees ?? 5)
   const [mois, setMois] = useState(initial?.mois ?? 0)
   const [montantNegocie, setMontantNegocie] = useState(0)
@@ -54,8 +55,17 @@ export function LicenciementRupture({ initial }: LicenciementRuptureProps = {}) 
             </div>
           </Field>
 
-          <Field label="Salaire mensuel de référence" hint="Moyenne brute des 12 derniers mois">
-            <SliderInput value={salaire} onChange={setSalaire} min={1400} max={15000} step={50} />
+          <Field label="Salaire de référence" hint={periodicite === "annuel" ? `soit ${salaire.toLocaleString("fr-FR")} €/mois — moyenne brute des 12 derniers mois` : "Moyenne brute des 12 derniers mois"}>
+            <div className="flex justify-end mb-2">
+              <PeriodeToggle value={periodicite} onChange={setPeriodicite} />
+            </div>
+            <SliderInput
+              value={periodicite === "annuel" ? salaire * 12 : salaire}
+              onChange={(v) => setSalaire(periodicite === "annuel" ? Math.round(v / 12) : v)}
+              min={periodicite === "annuel" ? 16800 : 1400}
+              max={periodicite === "annuel" ? 180000 : 15000}
+              step={periodicite === "annuel" ? 600 : 50}
+            />
           </Field>
 
           <div className="grid grid-cols-2 gap-4">

@@ -82,7 +82,7 @@ export default function Home() {
           <div className="mb-16 max-w-2xl">
             <p className="text-xs uppercase tracking-wide text-ink-400 mb-4">— Le parcours</p>
             <h2 className="font-display text-3xl md:text-5xl font-medium tracking-tight leading-tight">
-              De la <span className="italic text-forest">paie</span> à l&apos;impôt,
+              De la <span className="italic text-forest">paie</span>{" "}à l&apos;impôt,
               en passant par le freelance et les ruptures.
             </h2>
           </div>
