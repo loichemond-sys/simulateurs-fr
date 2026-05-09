@@ -12,6 +12,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/simulateur/licenciement-rupture",
     "/simulateur/tjm-freelance",
     "/simulateur/impot-revenu",
+    "/simulateur/retraite",
+    "/simulateur/epargne",
   ]
 
   return routes.map((route) => ({
