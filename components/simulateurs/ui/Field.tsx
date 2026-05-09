@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode, useRef, useState } from "react"
+import { ReactNode, useEffect, useRef, useState } from "react"
 
 interface FieldProps {
   label: string
@@ -31,13 +31,14 @@ interface SliderInputProps {
 
 export function SliderInput({ value, onChange, min, max, step = 1, unit = "€" }: SliderInputProps) {
   const [inputStr, setInputStr] = useState(String(value))
-  const prevValueRef = useRef(value)
+  const isFocused = useRef(false)
 
-  // Sync display when value changes from slider or external source
-  if (prevValueRef.current !== value) {
-    prevValueRef.current = value
-    setInputStr(String(value))
-  }
+  // Only sync display from external value changes (slider) when user is not typing
+  useEffect(() => {
+    if (!isFocused.current) {
+      setInputStr(String(value))
+    }
+  }, [value])
 
   return (
     <div>
@@ -50,7 +51,12 @@ export function SliderInput({ value, onChange, min, max, step = 1, unit = "€" 
             const n = parseFloat(e.target.value)
             if (!isNaN(n) && e.target.value !== "") onChange(n)
           }}
+          onFocus={(e) => {
+            isFocused.current = true
+            e.target.select()
+          }}
           onBlur={() => {
+            isFocused.current = false
             const n = parseFloat(inputStr)
             if (isNaN(n) || inputStr === "") {
               setInputStr(String(value))
@@ -58,7 +64,6 @@ export function SliderInput({ value, onChange, min, max, step = 1, unit = "€" 
               onChange(n)
             }
           }}
-          onFocus={(e) => e.target.select()}
           className="font-display text-2xl font-medium tracking-tight bg-transparent border-0 outline-none text-ink w-32 focus:ring-0 p-0"
         />
         <span className="text-sm text-ink-400 font-light">{unit}</span>
