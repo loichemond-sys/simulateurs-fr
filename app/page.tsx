@@ -49,6 +49,14 @@ const SIMULATEURS = [
       "Âge légal (62–64 ans), trimestres requis, décote/surcote, pension estimée. Trouvez votre âge optimal.",
     href: "/simulateur/retraite",
   },
+  {
+    numero: "07",
+    titre: "Épargne",
+    accroche: "Livret A, LEP, PEA, assurance-vie",
+    description:
+      "Simulez l'effet des intérêts composés. Comparez tous les produits d'épargne français sur 1 à 30 ans.",
+    href: "/simulateur/epargne",
+  },
 ]
 
 export default function Home() {
@@ -78,7 +86,7 @@ export default function Home() {
               href="#simulateurs"
               className="inline-flex items-center justify-center rounded-full border border-ink-200 text-ink px-7 py-4 font-body text-sm font-medium transition-all duration-200 hover:bg-ink hover:text-ivory hover:border-ink"
             >
-              Voir les 6 simulateurs
+              Voir les 7 simulateurs
             </Link>
           </div>
         </div>

@@ -59,6 +59,9 @@ export const links = {
 
   retraite: (params: { naissance?: number; debut?: number; salaire?: number } = {}) =>
     build("/simulateur/retraite", params),
+
+  epargne: (params: { capital?: number; versement?: number; duree?: number } = {}) =>
+    build("/simulateur/epargne", params),
 }
 
 /**
