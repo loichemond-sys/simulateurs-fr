@@ -1,52 +1,235 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { calculerEpargne, type ResultatProduit } from "@/lib/calculateurs/epargne"
+import { useMemo, useRef, useState } from "react"
+import { calculerPoints, type PointEpargne } from "@/lib/calculateurs/epargne"
 import { formatEuros } from "@/lib/format"
 import { Field, SliderInput, PeriodeToggle } from "./ui/Field"
 import { NextSteps } from "./ui/NextSteps"
 import { links } from "@/lib/cross-links"
 
-const RISQUE_LABEL: Record<string, string> = {
-  aucun: "Sans risque",
-  faible: "Risque faible",
-  élevé: "Risque marché",
+// ─── Constantes graphe ─────────────────────────────────────────────────────
+const VBW = 640
+const VBH = 224
+const PL = 54   // padding left (labels Y)
+const PR = 12   // padding right
+const PT = 12   // padding top
+const PB = 32   // padding bottom (labels X)
+const CW = VBW - PL - PR   // 574
+const CH = VBH - PT - PB   // 180
+
+// Couleurs (valeurs hex de globals.css)
+const C_FOREST = "#1F4D3A"
+const C_INK    = "#1A1815"
+const C_BRONZE = "#A47148"
+const C_GRID   = "#E8E2D5"
+const C_LABEL  = "#7A7468"
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function niceMax(v: number): number {
+  if (v <= 0) return 1000
+  const mag = Math.pow(10, Math.floor(Math.log10(v)))
+  return Math.ceil((v * 1.05) / mag) * mag
 }
 
-const LIQUIDITE_LABEL: Record<string, string> = {
-  immédiate: "Disponible immédiatement",
-  "moyen-terme": "Optimal à moyen terme",
-  "long-terme": "Optimal à long terme (5+ ans)",
+function gridTicks(max: number, count = 4): number[] {
+  const step = max / count
+  return Array.from({ length: count + 1 }, (_, i) => i * step)
 }
 
+function fmtK(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1000) return `${Math.round(v / 1000)}k`
+  return String(Math.round(v))
+}
+
+// ─── SVG Chart ─────────────────────────────────────────────────────────────
+function Chart({
+  points,
+  hoveredIdx,
+  onHover,
+  onLeave,
+  dureeAns,
+}: {
+  points: PointEpargne[]
+  hoveredIdx: number | null
+  onHover: (i: number) => void
+  onLeave: () => void
+  dureeAns: number
+}) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const maxCap = niceMax(points[points.length - 1]?.capital ?? 0)
+  const ticks = gridTicks(maxCap)
+
+  const xOf = (t: number) => PL + (t / dureeAns) * CW
+  const yOf = (v: number) => PT + CH - (v / maxCap) * CH
+  const baseline = PT + CH
+
+  // Build polyline point strings
+  const capPts = points.map((p) => `${xOf(p.t).toFixed(1)},${yOf(p.capital).toFixed(1)}`).join(" ")
+  const versePts = points.map((p) => `${xOf(p.t).toFixed(1)},${yOf(p.totalVerse).toFixed(1)}`).join(" ")
+
+  // Area polygons
+  const verseArea =
+    `${xOf(0).toFixed(1)},${baseline} ` +
+    versePts +
+    ` ${xOf(dureeAns).toFixed(1)},${baseline}`
+
+  const interetsArea =
+    capPts +
+    ` ${xOf(dureeAns).toFixed(1)},${yOf(points[points.length - 1].totalVerse).toFixed(1)} ` +
+    points
+      .slice()
+      .reverse()
+      .map((p) => `${xOf(p.t).toFixed(1)},${yOf(p.totalVerse).toFixed(1)}`)
+      .join(" ")
+
+  // Hover interaction
+  const handleMove = (clientX: number) => {
+    const svg = svgRef.current
+    if (!svg) return
+    try {
+      const pt = svg.createSVGPoint()
+      pt.x = clientX
+      pt.y = 0
+      const sp = pt.matrixTransform(svg.getScreenCTM()!.inverse())
+      const frac = (sp.x - PL) / CW
+      const idx = Math.max(0, Math.min(points.length - 1, Math.round(frac * (points.length - 1))))
+      onHover(idx)
+    } catch { /* ignore */ }
+  }
+
+  const hp = hoveredIdx !== null ? points[hoveredIdx] : null
+  const hx = hp ? xOf(hp.t) : 0
+  const hCapY = hp ? yOf(hp.capital) : 0
+  const hVerseY = hp ? yOf(hp.totalVerse) : 0
+
+  // Tooltip position: flip left when near right edge
+  const tooltipFlip = hoveredIdx !== null && hoveredIdx > points.length * 0.6
+  const tooltipX = tooltipFlip ? hx - 164 : hx + 14
+  const tooltipY = 16
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${VBW} ${VBH}`}
+      className="w-full select-none"
+      onMouseMove={(e) => handleMove(e.clientX)}
+      onMouseLeave={onLeave}
+      onTouchMove={(e) => {
+        e.preventDefault()
+        handleMove(e.touches[0].clientX)
+      }}
+    >
+      {/* Grid lines + Y labels */}
+      {ticks.map((v) => (
+        <g key={v}>
+          <line
+            x1={PL} y1={yOf(v)} x2={PL + CW} y2={yOf(v)}
+            stroke={C_GRID} strokeWidth={v === 0 ? 1.5 : 1}
+          />
+          <text
+            x={PL - 6} y={yOf(v)} textAnchor="end" dominantBaseline="middle"
+            fontSize={10} fill={C_LABEL}
+          >
+            {fmtK(v)}
+          </text>
+        </g>
+      ))}
+
+      {/* Versements area */}
+      <polygon points={verseArea} fill={C_INK} fillOpacity={0.07} />
+
+      {/* Intérêts area */}
+      <polygon points={interetsArea} fill={C_FOREST} fillOpacity={0.2} />
+
+      {/* Versements line */}
+      <polyline points={versePts} fill="none" stroke={C_INK} strokeWidth={1.5} strokeOpacity={0.25} />
+
+      {/* Capital line */}
+      <polyline points={capPts} fill="none" stroke={C_FOREST} strokeWidth={2} />
+
+      {/* X axis labels */}
+      <text x={PL} y={VBH - 6} textAnchor="start" fontSize={10} fill={C_LABEL}>
+        Aujourd&apos;hui
+      </text>
+      {dureeAns >= 4 && (
+        <text x={PL + CW / 2} y={VBH - 6} textAnchor="middle" fontSize={10} fill={C_LABEL}>
+          {Math.round(dureeAns / 2)} ans
+        </text>
+      )}
+      <text x={PL + CW} y={VBH - 6} textAnchor="end" fontSize={10} fill={C_LABEL}>
+        {dureeAns} ans
+      </text>
+
+      {/* Hover overlay */}
+      {hp && (
+        <>
+          {/* Vertical guide */}
+          <line
+            x1={hx} y1={PT} x2={hx} y2={PT + CH}
+            stroke={C_INK} strokeWidth={1} strokeOpacity={0.3}
+            strokeDasharray="4 3"
+          />
+          {/* Dot on capital */}
+          <circle cx={hx} cy={hCapY} r={4.5} fill={C_FOREST} stroke="white" strokeWidth={1.5} />
+          {/* Dot on versements */}
+          <circle cx={hx} cy={hVerseY} r={3} fill={C_INK} fillOpacity={0.35} stroke="white" strokeWidth={1} />
+
+          {/* Tooltip box */}
+          <rect
+            x={tooltipX} y={tooltipY}
+            width={152} height={74}
+            rx={8}
+            fill={C_INK} fillOpacity={0.9}
+          />
+          <text x={tooltipX + 12} y={tooltipY + 17} fontSize={10} fill={C_LABEL}>
+            {hp.t === 0 ? "Aujourd'hui" : `Dans ${hp.t} an${hp.t > 1 ? "s" : ""}`}
+          </text>
+          <text x={tooltipX + 12} y={tooltipY + 35} fontSize={13} fill="white" fontWeight={500}>
+            {formatEuros(hp.capital)}
+          </text>
+          <text x={tooltipX + 12} y={tooltipY + 52} fontSize={10} fill={C_FOREST}>
+            +{formatEuros(hp.interets)} gains
+          </text>
+          <text x={tooltipX + 12} y={tooltipY + 67} fontSize={10} fill="white" fillOpacity={0.45}>
+            {formatEuros(hp.totalVerse)} versés
+          </text>
+        </>
+      )}
+    </svg>
+  )
+}
+
+// ─── Component principal ───────────────────────────────────────────────────
 export interface SimulateurEpargneProps {
-  initial?: { capital?: number; versement?: number; duree?: number }
+  initial?: { capital?: number; versement?: number; duree?: number; taux?: number }
 }
 
 export function SimulateurEpargne({ initial }: SimulateurEpargneProps = {}) {
   const [capital, setCapital] = useState(initial?.capital ?? 5000)
   const [versement, setVersement] = useState(initial?.versement ?? 200)
-  const [duree, setDuree] = useState(initial?.duree ?? 10)
+  const [duree, setDuree] = useState(initial?.duree ?? 15)
+  const [taux, setTaux] = useState(initial?.taux ?? 5)
   const [periodicite, setPeriodicite] = useState<"mensuel" | "annuel">("mensuel")
-  const [produitActif, setProduitActif] = useState<string | null>(null)
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
-  const r = useMemo(() => calculerEpargne(capital, versement, duree), [capital, versement, duree])
+  const points = useMemo(
+    () => calculerPoints(capital, versement, taux, duree),
+    [capital, versement, taux, duree]
+  )
 
+  const final = points[points.length - 1]
+  const displayPt = hoveredIdx !== null ? points[hoveredIdx] : final
   const totalVerse = capital + versement * 12 * duree
-  const meilleur = r.resultats[0]
-  const produitDetailActif = produitActif
-    ? r.resultats.find((res) => res.produit.id === produitActif) ?? null
-    : null
-
-  const maxCapital = meilleur.capitalFinal
+  const ANNEE = new Date().getFullYear()
 
   return (
     <div className="grid lg:grid-cols-5 gap-8 lg:gap-12">
-      {/* Inputs */}
+      {/* ── Inputs ── */}
       <div className="lg:col-span-2 space-y-8">
         <div className="card p-7 space-y-7">
-          <Field label="Épargne de départ">
-            <SliderInput value={capital} onChange={setCapital} min={0} max={50000} step={500} />
+          <Field label="Capital initial">
+            <SliderInput value={capital} onChange={setCapital} min={0} max={100000} step={500} />
           </Field>
 
           <Field label="Versement régulier">
@@ -55,252 +238,103 @@ export function SimulateurEpargne({ initial }: SimulateurEpargneProps = {}) {
             </div>
             <SliderInput
               value={periodicite === "annuel" ? versement * 12 : versement}
-              onChange={(v) =>
-                setVersement(periodicite === "annuel" ? Math.round(v / 12) : v)
-              }
+              onChange={(v) => setVersement(periodicite === "annuel" ? Math.round(v / 12) : v)}
               min={0}
               max={periodicite === "annuel" ? 24000 : 2000}
               step={periodicite === "annuel" ? 600 : 50}
             />
           </Field>
 
-          <Field label="Durée de l'épargne" hint={`Jusqu'en ${new Date().getFullYear() + duree}`}>
+          <Field label="Durée" hint={`Jusqu'en ${ANNEE + duree}`}>
             <SliderInput value={duree} onChange={setDuree} min={1} max={30} step={1} unit="ans" />
           </Field>
-        </div>
 
-        {/* Résumé de l'effort */}
-        <div className="card p-6 space-y-3">
-          <p className="text-xs uppercase tracking-wide text-ink-400">— Votre effort d&apos;épargne</p>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-ink-400 font-light mb-1">Capital initial</p>
-              <p className="font-display text-xl font-medium">{formatEuros(capital)}</p>
-            </div>
-            <div>
-              <p className="text-ink-400 font-light mb-1">Versements {duree} ans</p>
-              <p className="font-display text-xl font-medium">{formatEuros(versement * 12 * duree)}</p>
-            </div>
-          </div>
-          <div className="pt-3 border-t border-ivory-300">
-            <p className="text-ink-400 font-light text-xs mb-1">Total épargné</p>
-            <p className="font-display text-2xl font-medium">{formatEuros(totalVerse)}</p>
-          </div>
+          <Field
+            label="Taux d'intérêt annuel"
+            hint={`Livret A 2,4 % · LEP 3,5 % · PEA ~8 % (historique)`}
+          >
+            <SliderInput value={taux} onChange={setTaux} min={0.5} max={15} step={0.25} unit="%" />
+          </Field>
         </div>
       </div>
 
-      {/* Résultats */}
+      {/* ── Résultats ── */}
       <div className="lg:col-span-3 space-y-6">
-        {/* Meilleur résultat */}
+        {/* Capital final */}
         <div className="card p-8 lg:p-10">
-          <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">
-            — Meilleur potentiel en {duree} ans ({meilleur.produit.nom})
-          </p>
+          <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">— Capital final</p>
           <div className="flex items-baseline gap-4 mb-2">
             <span className="font-display text-6xl lg:text-7xl font-medium tracking-tighter text-forest">
-              {formatEuros(meilleur.capitalFinal)}
+              {formatEuros(final.capital)}
             </span>
           </div>
-          <p className="font-display text-xl text-ink-500 italic mt-2">
-            dont{" "}
-            <span className="text-forest font-medium not-italic">
-              {formatEuros(meilleur.interetsGeneres)}
-            </span>{" "}
-            d&apos;intérêts et gains générés
-          </p>
-
-          {/* Barre de composition */}
-          <div className="mt-6">
-            <div className="h-3 rounded-full overflow-hidden flex bg-ivory-200">
-              <div
-                className="bg-ink/30 h-full"
-                style={{ width: `${(capital / meilleur.capitalFinal) * 100}%` }}
-              />
-              <div
-                className="bg-ink/15 h-full"
-                style={{ width: `${((totalVerse - capital) / meilleur.capitalFinal) * 100}%` }}
-              />
-              <div
-                className="bg-forest h-full"
-                style={{ width: `${(meilleur.interetsGeneres / meilleur.capitalFinal) * 100}%` }}
-              />
+          <div className="grid grid-cols-2 gap-6 mt-5 pt-5 border-t border-ivory-300">
+            <div>
+              <p className="text-xs text-ink-400 font-light mb-1 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-ink/20 shrink-0" />
+                Versements
+              </p>
+              <p className="font-display text-2xl font-medium tabular-nums">{formatEuros(totalVerse)}</p>
             </div>
-            <div className="flex gap-4 mt-2 text-xs text-ink-400 font-light flex-wrap">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-ink/30 shrink-0" />
-                Capital initial {formatEuros(capital)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-ink/15 shrink-0" />
-                Versements {formatEuros(totalVerse - capital)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-forest shrink-0" />
-                Gains {formatEuros(meilleur.interetsGeneres)}
-              </span>
+            <div>
+              <p className="text-xs text-ink-400 font-light mb-1 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-forest shrink-0" style={{ opacity: 0.7 }} />
+                Intérêts générés
+              </p>
+              <p className="font-display text-2xl font-medium tabular-nums text-forest">
+                {formatEuros(final.interets)}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Comparaison des produits */}
-        <div className="card p-7">
-          <p className="text-xs uppercase tracking-wide text-ink-400 mb-5">
-            — Comparer les produits d&apos;épargne français
-          </p>
-          <div className="space-y-2">
-            {r.resultats.map((res, i) => {
-              const isFirst = i === 0
-              const isActive = produitActif === res.produit.id
-              const barWidth = maxCapital > 0 ? (res.capitalFinal / maxCapital) * 100 : 0
-              const gainVsTotal = res.capitalFinal - totalVerse
-
-              return (
-                <div key={res.produit.id}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setProduitActif(isActive ? null : res.produit.id)
-                    }
-                    className={`w-full text-left rounded-xl p-4 transition-all ${
-                      isActive
-                        ? "bg-forest/5 border border-forest/30"
-                        : isFirst
-                        ? "bg-ivory-100 border border-ivory-200 hover:border-ivory-300"
-                        : "bg-ivory-50 border border-transparent hover:bg-ivory-100"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2 gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className={`font-display text-base font-medium truncate ${
-                            isActive ? "text-forest" : "text-ink"
-                          }`}
-                        >
-                          {res.produit.nom}
-                        </span>
-                        {isFirst && (
-                          <span className="shrink-0 text-xs bg-forest text-ivory px-2 py-0.5 rounded-full font-medium">
-                            meilleur
-                          </span>
-                        )}
-                        {res.plafondAtteint && (
-                          <span className="shrink-0 text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full font-medium">
-                            plafond
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span
-                          className={`font-display text-xl font-medium tabular-nums ${
-                            isActive ? "text-forest" : "text-ink"
-                          }`}
-                        >
-                          {formatEuros(res.capitalFinal)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="h-1.5 bg-ivory-200 rounded-full overflow-hidden mb-2">
-                      <div
-                        className={`h-full rounded-full ${isActive ? "bg-forest" : "bg-ink/25"}`}
-                        style={{ width: `${barWidth}%` }}
-                      />
-                    </div>
-
-                    <div className="flex justify-between text-xs text-ink-400 font-light">
-                      <span>{res.produit.tauxAfficheLabel}</span>
-                      <span className={gainVsTotal >= 0 ? "text-forest" : "text-ink-400"}>
-                        {gainVsTotal >= 0 ? "+" : ""}
-                        {formatEuros(gainVsTotal)} de gains
-                      </span>
-                    </div>
-                  </button>
-
-                  {/* Détail dépliable */}
-                  {isActive && (
-                    <div className="mx-1 px-5 py-4 bg-forest/5 rounded-b-xl border border-t-0 border-forest/20 text-sm space-y-2">
-                      <p className="text-ink-500 font-light">
-                        <span className="font-medium text-ink">Fiscalité — </span>
-                        {res.produit.fiscalite}
-                      </p>
-                      <p className="text-ink-500 font-light">
-                        <span className="font-medium text-ink">Liquidité — </span>
-                        {LIQUIDITE_LABEL[res.produit.liquidite]}
-                      </p>
-                      <p className="text-ink-500 font-light">
-                        <span className="font-medium text-ink">Risque — </span>
-                        {RISQUE_LABEL[res.produit.risque]}
-                        {res.produit.risque === "élevé" && (
-                          <span className="text-warning">
-                            {" "}· Le capital n&apos;est pas garanti
-                          </span>
-                        )}
-                      </p>
-                      {res.produit.eligible && (
-                        <p className="text-ink-500 font-light">
-                          <span className="font-medium text-ink">Éligibilité — </span>
-                          {res.produit.eligible}
-                        </p>
-                      )}
-                      {res.plafondAtteint && res.produit.plafondVersements && (
-                        <p className="text-warning font-light">
-                          Le plafond de {formatEuros(res.produit.plafondVersements)} est atteint —
-                          les versements s&apos;arrêtent automatiquement.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-          <p className="mt-4 text-xs text-ink-400 font-light leading-relaxed">
-            Les taux sont indicatifs (mai 2026). Le PEA affiche un rendement moyen historique
-            du MSCI World (~8%/an sur 20 ans), non garanti. Cliquez sur un produit pour les détails.
-          </p>
-        </div>
-
-        {/* Croissance sur le temps — tableau points clés */}
-        {duree >= 5 && (
-          <div className="card p-7">
-            <p className="text-xs uppercase tracking-wide text-ink-400 mb-5">
-              — Évolution du capital (Livret A vs PEA)
-            </p>
-            <div className="space-y-3">
-              {(() => {
-                const livretA = r.resultats.find((res) => res.produit.id === "livret-a")
-                const pea = r.resultats.find((res) => res.produit.id === "pea")
-                const anneesCles = [
-                  Math.floor(duree * 0.25),
-                  Math.floor(duree * 0.5),
-                  Math.floor(duree * 0.75),
-                  duree,
-                ]
-                  .filter((a) => a > 0)
-                  .filter((v, i, arr) => arr.indexOf(v) === i)
-
-                return anneesCles.map((annee) => {
-                  const lA = livretA?.historique.find((h) => h.annee === annee)
-                  const pA = pea?.historique.find((h) => h.annee === annee)
-                  const vA = capital + versement * 12 * annee
-                  return (
-                    <div key={annee} className="grid grid-cols-3 gap-2 text-sm">
-                      <span className="text-ink-400 font-light">dans {annee} an{annee > 1 ? "s" : ""}</span>
-                      <div>
-                        <p className="text-xs text-ink-400 font-light mb-0.5">Livret A</p>
-                        <p className="font-medium tabular-nums">{formatEuros(lA?.capital ?? 0)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-ink-400 font-light mb-0.5">PEA ETF</p>
-                        <p className="font-medium tabular-nums text-forest">{formatEuros(pA?.capital ?? 0)}</p>
-                      </div>
-                    </div>
-                  )
-                })
-              })()}
+        {/* Graphe */}
+        <div className="card p-6">
+          {/* Données du point survolé */}
+          <div className="flex items-baseline justify-between mb-5 gap-4">
+            <div>
+              <p className="text-xs text-ink-400 font-light mb-1">
+                {displayPt.t === 0
+                  ? "Aujourd'hui"
+                  : `Dans ${displayPt.t} an${displayPt.t > 1 ? "s" : ""} · ${ANNEE + displayPt.t}`}
+              </p>
+              <p className="font-display text-2xl font-medium tabular-nums">
+                {formatEuros(displayPt.capital)}
+              </p>
+            </div>
+            <div className="flex gap-6 text-sm shrink-0">
+              <div className="text-right">
+                <p className="text-xs text-ink-400 font-light mb-0.5">Versé</p>
+                <p className="tabular-nums font-medium">{formatEuros(displayPt.totalVerse)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-forest/70 font-light mb-0.5">Gains</p>
+                <p className="tabular-nums font-medium text-forest">+{formatEuros(displayPt.interets)}</p>
+              </div>
             </div>
           </div>
-        )}
+
+          <Chart
+            points={points}
+            hoveredIdx={hoveredIdx}
+            onHover={setHoveredIdx}
+            onLeave={() => setHoveredIdx(null)}
+            dureeAns={duree}
+          />
+        </div>
+
+        {/* Phrase résumé */}
+        <div className="rounded-xl bg-ivory-200 px-6 py-5">
+          <p className="text-sm text-ink-500 font-light leading-relaxed text-center">
+            Avec un capital initial de{" "}
+            <strong className="text-ink font-semibold">{formatEuros(capital)}</strong> et en versant{" "}
+            <strong className="text-ink font-semibold">{formatEuros(versement)}/mois</strong> pendant{" "}
+            <strong className="text-ink font-semibold">{duree} ans</strong> à{" "}
+            <strong className="text-ink font-semibold">{taux} %</strong>, vous obtenez{" "}
+            <strong className="text-forest font-semibold">{formatEuros(final.capital)}</strong> — dont{" "}
+            <strong className="text-forest font-semibold">{formatEuros(final.interets)}</strong> de gains.
+          </p>
+        </div>
 
         <NextSteps
           items={[
@@ -313,9 +347,9 @@ export function SimulateurEpargne({ initial }: SimulateurEpargneProps = {}) {
             },
             {
               eyebrow: "Mon impôt sur les gains",
-              href: links.impot({ revenu: Math.round(meilleur.capitalFinal * 0.05 * 10) }),
-              title: "Calculer l'impôt sur mes revenus du capital",
-              description: `Les gains d'épargne sont imposables. Estimez l'impact fiscal sur votre situation.`,
+              href: links.impot({ revenu: Math.round(capital * 0.03 * 12) }),
+              title: "Calculer mon impôt sur le revenu",
+              description: `Les gains d'épargne sont soumis à la fiscalité. Estimez l'impact sur votre situation.`,
             },
           ]}
         />

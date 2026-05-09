@@ -31,7 +31,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   const initial = {
     capital: num(sp, "capital", 5000),
     versement: num(sp, "versement", 200),
-    duree: num(sp, "duree", 10),
+    duree: num(sp, "duree", 15),
+    taux: num(sp, "taux", 5),
   }
 
   return (
